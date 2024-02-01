@@ -110,23 +110,6 @@ export default function MoreActionsMenu({
               {t?.questionInputField?.markdown ?? "Markdown"}
             </button>
           </li>
-          <li>
-            <button
-              className="rounded flex gap-1 items-center justify-start py-0.5 px-1 w-full whitespace-nowrap hover:bg-button-secondary focus:bg-button-secondary hover:text-button-secondary focus:text-button-secondary"
-              data-tooltip-id="more-actions-tooltip"
-              data-tooltip-content="Reset your OpenAI API key."
-              onClick={() => {
-                vscode.postMessage({
-                  type: "resetApiKey",
-                });
-                // close menu
-                setShowMoreActions(false);
-              }}
-            >
-              <Icon icon="cancel" className="w-3 h-3" />
-              {t?.questionInputField?.resetAPIKey ?? "Reset API Key"}
-            </button>
-          </li>
           <li className="block xs:hidden">
             <ModelSelect
               currentConversation={currentConversation}

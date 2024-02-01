@@ -1,15 +1,88 @@
 import * as vscode from "vscode";
 import ChatGptViewProvider from './chatgpt-view-provider';
+import { Conversation, Verbosity } from "./renderer/types";
 
-const menuCommands = [
-	"addTests", "findProblems", "optimize", "explain",
-	"addComments", "completeCode", "generateCode",
-	"customPrompt1", "customPrompt2", "customPrompt3", "customPrompt4", "customPrompt5", "customPrompt6",
-	"adhoc"];
+const menuCommands = ["generateCode", "adhoc"];
+
+class ChatRequest {
+	editor: vscode.TextEditor;
+	document: vscode.TextDocument;
+	start: number;
+	end: number;
+	constructor(editor: vscode.TextEditor, selection: vscode.Selection) {
+		this.editor = editor;
+		this.document = editor.document;
+		this.start = this.document.offsetAt(selection.start);
+		this.end = this.document.offsetAt(selection.end);
+	}
+	public edit(new_code: string) {
+		this.editor.edit(async editBuilder => {
+			const text = this.document?.getText();
+			const left_uri = vscode.Uri.parse('chatgpt-diff:previous').with({ fragment: text });
+			const right_uri = this.document.uri;
+			const range = new vscode.Range(this.document.positionAt(this.start), this.document.positionAt(this.end));
+			editBuilder.replace(range, new_code);
+			const success = await vscode.commands.executeCommand('vscode.diff', left_uri, right_uri);
+		});
+	}
+}
+
+
+export class ConverterCodeActionProvider implements vscode.CodeActionProvider {
+	public provideCodeActions(): vscode.CodeAction[] {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor) return [];
+		const selection = editor.selection;
+		const code = editor.document.getText(selection);
+
+		// If the selected text is empty, don't show the code action in quick fix menu
+		if (!code) return [];
+
+		const prompts = vscode.workspace.getConfiguration("chatgpt").get("gpt3.prompts");
+		if (!prompts) return [];
+
+		// show the code action in quick fix menu
+		return (prompts as any[])
+			.map(c => c.match(/^(?:\s*\[(.*?)\])?\s*(.*?)\s*:\s*(.*)\s*$/))
+			.filter(groups => !groups[1] || groups[1] == 'inline' || groups[1].split(',').includes(editor.document.languageId))
+			.map(groups => {
+				const inline = groups[1] && groups[1].split(',').includes('inline');
+				let action = new vscode.CodeAction(
+					"GPT: " + groups[2],
+					inline ? vscode.CodeActionKind.RefactorInline : vscode.CodeActionKind.Refactor
+				);
+				action.command = inline ? {
+					command: "vscode-chatgpt.inlinecommand",
+					title: "GPT: " + groups[2],
+					arguments: [groups[3], code, selection, editor],
+				} : {
+					command: "vscode-chatgpt.command",
+					title: "GPT: " + groups[2],
+					arguments: [groups[3], code, selection, editor],
+				};
+				return action;
+			});
+	}
+}
 
 export async function activate(context: vscode.ExtensionContext) {
+	const myProvider = new class implements vscode.TextDocumentContentProvider {
+
+		// emitter and its event
+		onDidChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
+		onDidChange = this.onDidChangeEmitter.event;
+
+		provideTextDocumentContent(uri: vscode.Uri): string {
+			return uri.fragment;
+		}
+	};
+	context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider("chatgpt-diff", myProvider));
+
+
 	let adhocCommandPrefix: string = context.globalState.get("chatgpt-adhoc-prompt") || '';
 	const provider = new ChatGptViewProvider(context);
+
+	vscode.window.showTextDocument(document, vscode.ViewColumn.Beside)
 
 	const view = vscode.window.registerWebviewViewProvider(
 		"vscode-chatgpt.view",
@@ -20,6 +93,97 @@ export async function activate(context: vscode.ExtensionContext) {
 			},
 		}
 	);
+
+	const actionProvider = vscode.languages.registerCodeActionsProvider(
+		{ language: "*", scheme: "*" },
+		new ConverterCodeActionProvider()
+	);
+
+	const actionCommand = vscode.commands.registerCommand('vscode-chatgpt.command', async (prompt, code, selection, editor) => {
+		if (code && prompt) {
+			const currentConversation = provider.currentConversation;
+
+			if (currentConversation) {
+				await provider?.sendApiRequest(prompt, {
+					command: 'command',
+					code: code,
+					language: editor.document.languageId,
+					conversation: currentConversation,
+				});
+			} else {
+				console.error('command - No current conversation found');
+			}
+		}
+	});
+
+
+	let chat_requests: ChatRequest[] = [];
+	const actionInlineCommand = vscode.commands.registerCommand('vscode-chatgpt.inlinecommand', async (prompt, code, selection, editor: vscode.TextEditor) => {
+		if (code && prompt) {
+			const title = 'inline';
+			const currentConversation = {
+				id: `${title}-${Date.now()}`,
+				title,
+				messages: [],
+				inProgress: false,
+				createdAt: Date.now(),
+				model: provider?.currentConversation?.model,
+				autoscroll: true,
+				verbosity: Verbosity.code
+			} as Conversation;
+
+			if (currentConversation) {
+				const request = new ChatRequest(editor, selection);
+				chat_requests.push(request);
+				const document = editor.document;
+				const msg = await provider?.sendApiRequest(prompt, {
+					command: 'command',
+					code: code,
+					language: document.languageId,
+					conversation: currentConversation,
+				});
+				// find the code to include
+				const match = msg?.match(/```.*?\n(.*?)\n```/s);
+				chat_requests.splice(chat_requests.indexOf(request));
+				if (match) {
+					request.edit(match[1]);
+				}
+			} else {
+				console.error('command - No current conversation found');
+			}
+		}
+	});
+
+	vscode.workspace.onDidChangeTextDocument(event => {
+		for (const request of chat_requests) {
+			if (request.document === event.document) {
+				for (const change of event.contentChanges) {
+					const delta = change.text.length - change.rangeLength;
+					const p1 = change.rangeOffset;
+					const p2 = p1 + change.rangeLength;
+					if (p2 <= request.start) {
+						request.start += delta;
+						request.end += delta;
+					} else if (p1 <= request.start) {
+						if (p2 >= request.end) {
+							request.start = request.end = p1;
+						} else {
+							request.start = p1;
+							request.end += delta;
+						}
+					} else if (p1 <= request.end) {
+						if (p2 <= request.end) {
+							request.end += delta;
+						} else {
+							request.end = p1;
+						}
+					}
+				}
+			}
+		}
+	}, null, context.subscriptions);
+
+
 
 	const freeText = vscode.commands.registerCommand("vscode-chatgpt.freeText", async () => {
 		const value = await vscode.window.showInputBox({
@@ -51,7 +215,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	});
 
 	const clearSession = vscode.commands.registerCommand("vscode-chatgpt.clearSession", () => {
-		context.globalState.update("chatgpt-gpt3-apiKey", null);
+		// context.globalState.update("chatgpt-gpt3-apiKey", null);
 	});
 
 	const configChanged = vscode.workspace.onDidChangeConfiguration(e => {
@@ -136,33 +300,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	// Skip AdHoc - as it was registered earlier
-	const registeredCommands = menuCommands.filter(command => command !== "adhoc" && command !== "generateCode").map((command) => vscode.commands.registerCommand(`vscode-chatgpt.${command}`, () => {
-		const prompt = vscode.workspace.getConfiguration("chatgpt").get<string>(`promptPrefix.${command}`);
-		const editor = vscode.window.activeTextEditor;
-
-		if (!editor) {
-			return;
-		}
-
-		const selection = editor.document.getText(editor.selection);
-		if (selection && prompt) {
-			const currentConversation = provider.currentConversation;
-
-			if (currentConversation) {
-				provider?.sendApiRequest(prompt, {
-					command,
-					code: selection,
-					language: editor.document.languageId,
-					conversation: currentConversation,
-				});
-			} else {
-				console.error(`${command} - No current conversation found`);
-			}
-		}
-	}));
-
-	context.subscriptions.push(view, freeText, resetThread, exportConversation, clearSession, configChanged, adhocCommand, generateCodeCommand, ...registeredCommands);
+	context.subscriptions.push(view, actionProvider, actionCommand, actionInlineCommand,
+		freeText, resetThread, exportConversation, clearSession, configChanged, adhocCommand,
+		generateCodeCommand);
 
 	const setContext = () => {
 		menuCommands.forEach(command => {

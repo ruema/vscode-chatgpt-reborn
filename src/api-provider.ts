@@ -1,24 +1,18 @@
 import { encoding_for_model, Tiktoken, TiktokenModel } from "@dqbd/tiktoken";
-import OpenAI, { ClientOptions } from 'openai';
-import { v4 as uuidv4 } from "uuid";
 import { Conversation, Message, Model, MODEL_TOKEN_LIMITS, Role } from "./renderer/types";
 
 export class ApiProvider {
-  private _openai: OpenAI;
+  private _apiBaseUrl: string;
   private _temperature: number;
   private _topP: number;
 
-  public apiConfig: ClientOptions;
-
-  constructor(apiKey: string, {
-    organizationId = '',
-    apiBaseUrl = 'https://api.openai.com/v1',
+  constructor({
+    apiBaseUrl = '',
     maxTokens = 4096,
     maxResponseTokens,
     temperature = 0.9,
     topP = 1,
   }: {
-    organizationId?: string;
     apiBaseUrl?: string;
     maxTokens?: number;
     maxResponseTokens?: number;
@@ -26,14 +20,7 @@ export class ApiProvider {
     topP?: number;
   } = {}) {
     // If apiBaseUrl ends with slash, remove it
-    apiBaseUrl = apiBaseUrl.replace(/\/$/, '');
-    // OpenAI API config
-    this.apiConfig = {
-      apiKey: apiKey,
-      organization: organizationId,
-      // baseURL: apiBaseUrl,
-    };
-    this._openai = new OpenAI(this.apiConfig);
+    this._apiBaseUrl = apiBaseUrl.replace(/\/$/, '');
     this._temperature = temperature;
     this._topP = topP;
   }
@@ -70,103 +57,51 @@ export class ApiProvider {
     temperature?: number;
     topP?: number;
   } = {}): AsyncGenerator<any, any, unknown> {
-    const model = conversation.model ?? Model.gpt_35_turbo;
-    const promptTokensUsed = ApiProvider.countConversationTokens(conversation);
-    const completeTokensLeft = this.getRemainingTokens(model, promptTokensUsed);
+    conversation.messages[0].role;
 
-    // Only stream if not using a proxy
-    const useStream = true; // this.apiConfig.basePath === 'https://api.openai.com/v1';
-    const response = await this._openai.chat.completions.create(
+    const input = {
+      stream: true,
+      messages: conversation.messages.map(m => ({
+        role: m.role,
+        content: m.content
+      }))
+    };
+
+    const API_TOKEN = "xxx";
+    const response = await fetch(
+      this._apiBaseUrl,
       {
-        model,
-        messages: conversation.messages.map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
-        max_tokens: completeTokensLeft,
-        temperature,
-        top_p: topP,
-        stream: useStream,
+        headers: { Authorization: `Bearer ${API_TOKEN}` },
+        method: "POST",
+        body: JSON.stringify(input),
       }
     );
-
-    for await (const chunk of response) {
-      if (abortSignal.aborted) {
-        return;
+    if (response.headers.get('Content-Type') == 'application/json') {
+      const result = await response.json();
+      if (result.success) {
+        yield result.result.response;
+      } else {
+        throw new Error(result.errors.map((e: any) => e.message).join('\n'));
       }
-
-      try {
-        const token = chunk.choices[0].delta.content;
-
-        if (token) {
-          yield token;
+    } else {
+      const textDecoderStream = new TextDecoderStream();
+      const stream = response?.body?.pipeThrough(textDecoderStream);
+      if (!stream) return;
+      let data = "";
+      for await (const chunk of (stream as any)) {
+        // Do something with each chunk
+        data += chunk;
+        let lines = data.split('\n');
+        data = lines.pop() as string;
+        for (const line of lines) {
+          const m = line.match(/^data:\s*(.*?)\s*$/);
+          if (m) {
+            if (m[1] == '[DONE]') break;
+            yield JSON.parse(m[1]).response;
+          }
         }
-      } catch (e: any) {
-        console.error('api JSON parse error. Message:', e?.message, 'Error:', e);
       }
     }
-  }
-
-  async getChatCompletion(conversation: Conversation, {
-    temperature = this._temperature,
-    topP = this._topP,
-  }: {
-    temperature?: number;
-    topP?: number;
-  } = {}): Promise<OpenAI.Chat.Completions.ChatCompletionMessage | undefined> {
-    const model = conversation.model ?? Model.gpt_35_turbo;
-    const promptTokensUsed = ApiProvider.countConversationTokens(conversation);
-    const completeTokensLeft = this.getRemainingTokens(model, promptTokensUsed);
-
-    const response = await this._openai.chat.completions.create(
-      {
-        model,
-        messages: conversation.messages.map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
-        stream: false,
-        max_tokens: completeTokensLeft,
-        temperature,
-        top_p: topP,
-      }
-    );
-
-    return response.choices[0].message;
-  }
-
-  // Note: PromptCompletion is LEGACY
-  // Using prompt as a param instead of the last message in the conversation to
-  // allow for special formatting of the prompt before sending it to OpenAI
-  async getPromptCompletion(prompt: string, conversation: Conversation, {
-    temperature = this._temperature,
-    topP = this._topP,
-  }: {
-    temperature?: number;
-    topP?: number;
-  } = {}): Promise<Message | undefined> {
-    const model = conversation.model ?? Model.gpt_35_turbo;
-    const promptTokensUsed = ApiProvider.countConversationTokens(conversation);
-    const completeTokensLeft = this.getRemainingTokens(model, promptTokensUsed);
-
-    const response = await this._openai.chat.completions.create(
-      {
-        model,
-        messages: [{ "role": "user", "content": prompt }],
-        max_tokens: completeTokensLeft,
-        temperature,
-        top_p: topP,
-        stream: false,
-      }
-    );
-
-    return {
-      id: uuidv4(),
-      content: response.choices[0].message.content ?? '',
-      rawContent: response.choices[0].message.content ?? '',
-      role: Role.assistant,
-      createdAt: Date.now(),
-    };
   }
 
   // * Utility token counting methods
@@ -250,35 +185,8 @@ export class ApiProvider {
     this._topP = value;
   }
 
-  updateApiKey(apiKey: string) {
-    // OpenAI API config
-    this.apiConfig = {
-      apiKey: apiKey,
-      organization: this.apiConfig.organization,
-      // baseURL: this.apiConfig.baseURL,
-    };
-    this._openai = new OpenAI(this.apiConfig);
-  }
-
-  updateOrganizationId(organizationId: string) {
-    // OpenAI API config
-    this.apiConfig = {
-      apiKey: this.apiConfig.apiKey,
-      organization: organizationId,
-      // baseURL: this.apiConfig.baseURL,
-    };
-    this._openai = new OpenAI(this.apiConfig);
-  }
-
   updateApiBaseUrl(apiBaseUrl: string) {
     // If apiBaseUrl ends with slash, remove it
-    apiBaseUrl = apiBaseUrl.replace(/\/$/, '');
-    // OpenAI API config
-    this.apiConfig = {
-      apiKey: this.apiConfig.apiKey,
-      organization: this.apiConfig.organization,
-      // baseURL: this.apiConfig.baseURL,
-    };
-    this._openai = new OpenAI(this.apiConfig);
+    this._apiBaseUrl = apiBaseUrl.replace(/\/$/, '');
   }
 }

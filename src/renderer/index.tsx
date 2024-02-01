@@ -21,7 +21,7 @@ const App = () => {
   return (
     <React.StrictMode>
       <Provider store={store}>
-        <Router basename="/index.html">
+        <Router basename={window.location.pathname}>
           <Layout vscode={vscode} />
         </Router>
       </Provider>

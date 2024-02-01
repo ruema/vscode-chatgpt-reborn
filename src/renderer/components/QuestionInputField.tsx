@@ -222,12 +222,11 @@ export default ({
           {!currentConversation.inProgress && (
             <button
               title="Submit prompt"
-              className="ask-button rounded px-4 py-2 flex flex-row items-center bg-button hover:bg-button-hover focus:bg-button-hover"
+              className="ask-button rounded px-4 py-2 flex flex-row items-center text-button bg-button hover:bg-button-hover focus:bg-button-hover"
               onClick={() => {
                 askQuestion();
               }}
             >
-              {t?.questionInputField?.ask ?? "Ask"}
               <Icon icon="send" className="w-5 h-5 ml-1" />
             </button>
           )}
@@ -251,10 +250,9 @@ export default ({
             />
             <button
               className={`rounded flex gap-1 items-center justify-start py-0.5 px-1 whitespace-nowrap
-                ${
-                  useEditorSelection
-                    ? "bg-button text-button hover:bg-button-hover focus:bg-button-hover"
-                    : "hover:bg-button-secondary hover:text-button-secondary focus:text-button-secondary focus:bg-button-secondary"
+                ${useEditorSelection
+                  ? "bg-button text-button hover:bg-button-hover focus:bg-button-hover"
+                  : "hover:bg-button-secondary hover:text-button-secondary focus:text-button-secondary focus:bg-button-secondary"
                 }
               `}
               data-tooltip-id="footer-tooltip"
@@ -300,18 +298,16 @@ export default ({
           />
           <div className="flex flex-row items-start gap-2">
             <div
-              className={`rounded flex gap-1 items-center justify-start py-1 px-2 w-full text-[10px] whitespace-nowrap hover:bg-button-secondary focus:bg-button-secondary hover:text-button-secondary focus:text-button-secondary transition-bg  ${
-                tokenCountAnimation
+              className={`rounded flex gap-1 items-center justify-start py-1 px-2 w-full text-[10px] whitespace-nowrap hover:bg-button-secondary focus:bg-button-secondary hover:text-button-secondary focus:text-button-secondary transition-bg  ${tokenCountAnimation
                   ? "duration-200 bg-blue-300 bg-opacity-20"
                   : "duration-500"
-              }
-                ${
-                  parseInt(tokenCountLabel) >
+                }
+                ${parseInt(tokenCountLabel) >
                   MODEL_TOKEN_LIMITS[
                     currentConversation?.model ?? Model.gpt_35_turbo
                   ].context
-                    ? "duration-200 bg-red-700 bg-opacity-20"
-                    : ""
+                  ? "duration-200 bg-red-700 bg-opacity-20"
+                  : ""
                 }
               `}
               ref={tokenCountRef}

@@ -3,13 +3,10 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import "react-tooltip/dist/react-tooltip.css";
 import { v4 as uuidv4 } from "uuid";
 import "../../styles/main.css";
-import ApiKeySetup from "./components/ApiKeySetup";
 import Tabs from "./components/Tabs";
 import { useAppDispatch, useAppSelector } from "./hooks";
 import { ActionRunState, setActionError, setActionState } from "./store/action";
 import {
-  ApiKeyStatus,
-  setApiKeyStatus,
   setChatGPTModels,
   setExtensionSettings,
   setTranslations,
@@ -31,7 +28,7 @@ import { unEscapeHTML } from "./utils";
 import Actions from "./views/actions";
 import Chat from "./views/chat";
 
-export default function Layout({ vscode }: { vscode: any }) {
+export default function Layout({ vscode }: { vscode: any; }) {
   const dispatch = useAppDispatch();
   const currentConversationId = useAppSelector(
     (state: any) => state.conversation.currentConversationId
@@ -45,7 +42,6 @@ export default function Layout({ vscode }: { vscode: any }) {
 
   const settings = useAppSelector((state: any) => state.app.extensionSettings);
   const debug = useAppSelector((state: any) => state.app.debug);
-  const apiKeyStatus = useAppSelector((state: any) => state.app?.apiKeyStatus);
   const chatGPTModels = useAppSelector((state: any) => state.app.chatGPTModels);
   const useEditorSelection = useAppSelector(
     (state: any) => state.app.useEditorSelection
@@ -62,12 +58,6 @@ export default function Layout({ vscode }: { vscode: any }) {
     if (chatGPTModels.length === 0) {
       vscode.postMessage({
         type: "getChatGPTModels",
-      });
-    }
-    if (apiKeyStatus === ApiKeyStatus.Unknown) {
-      // Ask for the API key status
-      vscode.postMessage({
-        type: "getApiKeyStatus",
       });
     }
   }, []);
@@ -183,8 +173,8 @@ export default function Layout({ vscode }: { vscode: any }) {
           done: true,
           questionCode: data?.code
             ? (window as any)?.marked.parse(
-                `\`\`\`${data?.editorLanguage}\n${data.code}\n\`\`\``
-              )
+              `\`\`\`${data?.editorLanguage}\n${data.code}\n\`\`\``
+            )
             : "",
         } as Message;
 
@@ -265,8 +255,8 @@ export default function Layout({ vscode }: { vscode: any }) {
           !data.responseInMarkdown
             ? "```\r\n" + unEscapeHTML(data.value) + " \r\n ```"
             : (data?.value ?? "").split("```").length % 2 === 1
-            ? data.value
-            : data.value + "\n\n```\n\n"
+              ? data.value
+              : data.value + "\n\n```\n\n"
         );
 
         if (existingMessage) {
@@ -397,27 +387,6 @@ export default function Layout({ vscode }: { vscode: any }) {
           );
         }
         break;
-      case "updateApiKeyStatus":
-        let keyStatus: ApiKeyStatus;
-
-        if (data.value) {
-          keyStatus = ApiKeyStatus.Valid;
-        } else if (apiKeyStatus === ApiKeyStatus.Unknown) {
-          keyStatus = ApiKeyStatus.Unset;
-        } else if (apiKeyStatus === ApiKeyStatus.Pending) {
-          keyStatus = ApiKeyStatus.Invalid;
-        } else if (apiKeyStatus === ApiKeyStatus.Valid) {
-          keyStatus = ApiKeyStatus.Unset;
-        } else {
-          keyStatus = apiKeyStatus;
-        }
-
-        if (debug) {
-          console.log("Renderer - API key status:", keyStatus);
-        }
-
-        dispatch(setApiKeyStatus(keyStatus));
-        break;
       case "tokenCount":
         if (debug) {
           console.log("Renderer - Conversation token count:", data.tokenCount);
@@ -499,49 +468,42 @@ export default function Layout({ vscode }: { vscode: any }) {
 
   return (
     <>
-      {apiKeyStatus === ApiKeyStatus.Unknown ||
-      apiKeyStatus === ApiKeyStatus.Valid ? (
-        <>
-          {!settings?.minimalUI && !settings?.disableMultipleConversations && (
-            <Tabs
-              conversationList={conversationList}
-              currentConversationId={currentConversationId}
-            />
-          )}
-          <Routes>
-            {/* <Route path="/prompts" element={<Prompts vscode={vscode} />} /> */}
-            <Route path="/actions" element={<Actions vscode={vscode} />} />
-            {conversationList &&
-              conversationList.map &&
-              conversationList.map((conversation: Conversation) => (
-                <Route
-                  key={conversation.id}
-                  path={`/chat/${conversation.id}`}
-                  index={conversation.id === currentConversationId}
-                  element={
-                    <Chat
-                      conversation={conversation}
-                      vscode={vscode}
-                      conversationList={conversationList}
-                    />
-                  }
-                />
-              ))}
+      {!settings?.minimalUI && !settings?.disableMultipleConversations && (
+        <Tabs
+          conversationList={conversationList}
+          currentConversationId={currentConversationId}
+        />
+      )}
+      <Routes>
+        {/* <Route path="/prompts" element={<Prompts vscode={vscode} />} /> */}
+        <Route path="/actions" element={<Actions vscode={vscode} />} />
+        {conversationList &&
+          conversationList.map &&
+          conversationList.map((conversation: Conversation) => (
             <Route
-              path="/"
+              key={conversation.id}
+              path={`/chat/${conversation.id}`}
+              index={conversation.id === currentConversationId}
               element={
-                <Navigate
-                  to={`/chat/${conversationList[0]?.id ?? "chat"}`}
-                  replace={true}
+                <Chat
+                  conversation={conversation}
+                  vscode={vscode}
+                  conversationList={conversationList}
                 />
               }
             />
-            {/* <Route path="/options" element={<Options vscode={vscode} />} /> */}
-          </Routes>
-        </>
-      ) : (
-        <ApiKeySetup vscode={vscode} />
-      )}
+          ))}
+        <Route
+          path="/"
+          element={
+            <Navigate
+              to={`/chat/${conversationList[0]?.id ?? "chat"}`}
+              replace={true}
+            />
+          }
+        />
+        {/* <Route path="/options" element={<Options vscode={vscode} />} /> */}
+      </Routes>
     </>
   );
 }
