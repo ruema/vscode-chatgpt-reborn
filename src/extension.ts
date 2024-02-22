@@ -78,20 +78,17 @@ export async function activate(context: vscode.ExtensionContext) {
 	};
 	context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider("chatgpt-diff", myProvider));
 
-
 	let adhocCommandPrefix: string = context.globalState.get("chatgpt-adhoc-prompt") || '';
 	const provider = new ChatGptViewProvider(context);
 
-	vscode.window.showTextDocument(document, vscode.ViewColumn.Beside)
-
 	const view = vscode.window.registerWebviewViewProvider(
 		"vscode-chatgpt.view",
-		provider,
+		provider/*,
 		{
 			webviewOptions: {
 				retainContextWhenHidden: true,
 			},
-		}
+		}*/
 	);
 
 	const actionProvider = vscode.languages.registerCodeActionsProvider(
@@ -206,7 +203,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	});
 
 	const resetThread = vscode.commands.registerCommand("vscode-chatgpt.clearConversation", async () => {
-		provider?.sendMessage({ type: 'clearConversation' }, true);
+		provider?.clearChat();
+	});
+	const newChat = vscode.commands.registerCommand("vscode-chatgpt.newChat", async () => {
+		provider?.newChat();
+	});
+	const closeChat = vscode.commands.registerCommand("vscode-chatgpt.closeChat", async () => {
+		provider?.closeChat();
 	});
 
 	const exportConversation = vscode.commands.registerCommand("vscode-chatgpt.exportConversation", async () => {
@@ -301,8 +304,15 @@ export async function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(view, actionProvider, actionCommand, actionInlineCommand,
-		freeText, resetThread, exportConversation, clearSession, configChanged, adhocCommand,
+		freeText, resetThread, newChat, closeChat, exportConversation, clearSession, configChanged, adhocCommand,
 		generateCodeCommand);
+
+	for (let i = 1; i <= 9; i++) {
+		context.subscriptions.push(
+			vscode.commands.registerCommand("vscode-chatgpt.viewChat" + i, async () => {
+				provider.set_chat(i);
+			}));
+	}
 
 	const setContext = () => {
 		menuCommands.forEach(command => {
@@ -320,6 +330,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	};
 
 	setContext();
+	vscode.commands.executeCommand('setContext', 'chatGPT.chat_ids', '1');
 }
 
 export function deactivate() { }

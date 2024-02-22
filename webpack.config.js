@@ -1,7 +1,7 @@
 const path = require("path");
 
 module.exports = {
-    entry: './src/renderer/index.tsx',
+    entry: './src/webview/index.tsx',
     output: {
         filename: 'webview.bundle.js',
         path: path.resolve(__dirname, 'out'),
@@ -13,7 +13,7 @@ module.exports = {
                 test: /\.(ts|tsx)$/,
                 include: [
                     // render process code
-                    path.resolve(__dirname, 'src/renderer'),
+                    path.resolve(__dirname, 'src/webview'),
                     // types used by the render code
                     // path.resolve(__dirname, 'src/types.d.ts'),
                 ],
@@ -28,8 +28,8 @@ module.exports = {
                 test: /\.css$/,
                 include:
                     [
-                        path.resolve(__dirname, 'src/renderer'), // React UI code
-                        path.resolve(__dirname, 'node_modules/react-tooltip'), // react-tooltip
+                        path.resolve(__dirname, 'src/webview'), // React UI code
+                        // path.resolve(__dirname, 'node_modules/react-tooltip'), // react-tooltip
                         path.resolve(__dirname, 'styles'), // custom styles
                     ],
                 use: [

@@ -54,6 +54,105 @@
           "group": "chatGpt@8",
           "when": "editorHasSelection && adhoc-enabled"
         }
+      ],
+      "view/title": [
+        {
+          "command": "vscode-chatgpt.clearConversation",
+          "when": "view == vscode-chatgpt.view",
+          "group": "navigation"
+        },
+        {
+          "command": "vscode-chatgpt.closeChat",
+          "when": "view == vscode-chatgpt.view",
+          "group": "navigation"
+        },
+        {
+          "command": "vscode-chatgpt.newChat",
+          "when": "view == vscode-chatgpt.view && chatGPT.chat_ids =~ /^.{0,8}$/",
+          "group": "navigation"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat1",
+          "when": "view == vscode-chatgpt.view && chatGPT.chat_ids =~ /1/"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat2",
+          "when": "view == vscode-chatgpt.view && chatGPT.chat_ids =~ /2/"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat3",
+          "when": "view == vscode-chatgpt.view && chatGPT.chat_ids =~ /3/"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat4",
+          "when": "view == vscode-chatgpt.view && chatGPT.chat_ids =~ /4/"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat5",
+          "when": "view == vscode-chatgpt.view && chatGPT.chat_ids =~ /5/"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat6",
+          "when": "view == vscode-chatgpt.view && chatGPT.chat_ids =~ /6/"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat7",
+          "when": "view == vscode-chatgpt.view && chatGPT.chat_ids =~ /7/"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat8",
+          "when": "view == vscode-chatgpt.view && chatGPT.chat_ids =~ /8/"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat9",
+          "when": "view == vscode-chatgpt.view && chatGPT.chat_ids =~ /9/"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "vscode-chatgpt.closeChat",
+          "when": "false"
+        },
+        {
+          "command": "vscode-chatgpt.newChat",
+          "when": "false"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat1",
+          "when": "false"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat2",
+          "when": "false"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat3",
+          "when": "false"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat4",
+          "when": "false"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat5",
+          "when": "false"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat6",
+          "when": "false"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat7",
+          "when": "false"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat8",
+          "when": "false"
+        },
+        {
+          "command": "vscode-chatgpt.viewChat9",
+          "when": "false"
+        }
       ]
     },
     "submenus": [
@@ -79,6 +178,42 @@
     ],
     "commands": [
       {
+        "command": "vscode-chatgpt.viewChat1",
+        "title": "Chat 1"
+      },
+      {
+        "command": "vscode-chatgpt.viewChat2",
+        "title": "Chat 2"
+      },
+      {
+        "command": "vscode-chatgpt.viewChat3",
+        "title": "Chat 3"
+      },
+      {
+        "command": "vscode-chatgpt.viewChat4",
+        "title": "Chat 4"
+      },
+      {
+        "command": "vscode-chatgpt.viewChat5",
+        "title": "Chat 5"
+      },
+      {
+        "command": "vscode-chatgpt.viewChat6",
+        "title": "Chat 6"
+      },
+      {
+        "command": "vscode-chatgpt.viewChat7",
+        "title": "Chat 7"
+      },
+      {
+        "command": "vscode-chatgpt.viewChat8",
+        "title": "Chat 8"
+      },
+      {
+        "command": "vscode-chatgpt.viewChat9",
+        "title": "Chat 9"
+      },
+      {
         "command": "vscode-chatgpt.freeText",
         "title": "ChatGPT: Ask anything"
       },
@@ -98,7 +233,18 @@
       },
       {
         "command": "vscode-chatgpt.clearConversation",
-        "title": "ChatGPT: Clear conversation"
+        "title": "ChatGPT: Clear conversation",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "vscode-chatgpt.newChat",
+        "title": "ChatGPT: New chat",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "vscode-chatgpt.closeChat",
+        "title": "ChatGPT: Close chat",
+        "icon": "$(close)"
       },
       {
         "command": "vscode-chatgpt.exportConversation",
@@ -312,7 +458,9 @@
     "strip-markdown": "^5.0.0",
     "style-loader": "^3.3.2",
     "upath": "^2.0.1",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "@vscode/webview-ui-toolkit": "^1.2.2",
+    "markdown-it": "^14.0.0"
   },
   "resolutions": {
     "clone-deep": "^4.0.1"
