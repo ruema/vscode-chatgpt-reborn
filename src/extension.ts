@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import ChatGptViewProvider from './chatgpt-view-provider';
+import ChatGptViewProvider, { ApiRequestOptions } from './chatgpt-view-provider';
 import { Conversation, Verbosity } from "./renderer/types";
 
 const menuCommands = ["generateCode", "adhoc"];
@@ -98,18 +98,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const actionCommand = vscode.commands.registerCommand('vscode-chatgpt.command', async (prompt, code, selection, editor) => {
 		if (code && prompt) {
-			const currentConversation = provider.currentConversation;
-
-			if (currentConversation) {
-				await provider?.sendApiRequest(prompt, {
-					command: 'command',
-					code: code,
-					language: editor.document.languageId,
-					conversation: currentConversation,
-				});
-			} else {
-				console.error('command - No current conversation found');
-			}
+			const options: ApiRequestOptions = {
+				code: code,
+				language: editor.document.languageId,
+			};
+			provider?.newChat2(0);
+			const conversation = provider?.conversations[0];
+			await provider?.sendApiRequest(conversation, prompt, options);
+		} else {
+			console.error('command - No current conversation found');
 		}
 	});
 
@@ -281,7 +278,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	});
 
 	const generateCodeCommand = vscode.commands.registerCommand(`vscode-chatgpt.generateCode`, () => {
-		const editor = vscode.window.activeTextEditor;
+		/*const editor = vscode.window.activeTextEditor;
 
 		if (!editor) {
 			return;
@@ -289,18 +286,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
 		const selection = editor.document.getText(editor.selection);
 		if (selection) {
-			const currentConversation = provider.currentConversation;
-
-			if (currentConversation) {
-				provider?.sendApiRequest(selection, {
-					command: "generateCode",
-					language: editor.document.languageId,
-					conversation: currentConversation,
-				});
-			} else {
-				console.error("generateCode - No current conversation found");
-			}
+			const options: ApiRequestOptions = {
+				code: selection, language: editor.document.languageId
+			};
+			await provider?.sendApiRequest(conversation, data.message, options);
+		} else {
+			console.error("generateCode - No current conversation found");
 		}
+	}*/
 	});
 
 	context.subscriptions.push(view, actionProvider, actionCommand, actionInlineCommand,

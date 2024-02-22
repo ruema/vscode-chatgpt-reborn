@@ -223,7 +223,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 	public set_chat(chat_id: any) {
 		if (this.webView) {
 			this.webView.title = "#" + chat_id;
-			this.currentConversation = 0 + chat_id;
+			this.currentConversation = 1 * chat_id;
 			this.refresh_chat();
 		}
 	}
@@ -268,8 +268,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		return 10;
 	}
 
-	public newChat() {
-		const i = this.find_next_empty_conversation();
+	public newChat2(i: number) {
 		this.conversations[i] = {
 			id: "" + i,
 			createdAt: "",
@@ -282,8 +281,17 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		this.set_chat(i);
 	}
 
+	public newChat() {
+		const i = this.find_next_empty_conversation();
+		this.newChat2(i);
+	}
+
 	public closeChat() {
 		this.conversations[this.currentConversation] = undefined;
+		this.sendMessage({
+			type: "closeConversation",
+			conversationId: this.currentConversation,
+		});
 		const i = this.find_next_conversation();
 		if (i == 10) {
 			this.currentConversation = 0;
@@ -296,6 +304,10 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 
 	public clearChat() {
 		this.conversations[this.currentConversation] = undefined;
+		this.sendMessage({
+			type: "showConversation",
+			conversationId: this.currentConversation,
+		});
 		this.currentConversation -= 1;
 		this.newChat();
 	}
