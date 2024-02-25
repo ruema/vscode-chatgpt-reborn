@@ -311,12 +311,6 @@
             "GPT-3.5-TURBO is optimized for chat at 1/10th the cost of `text-davinci-003`."
           ]
         },
-        "chatgpt.gpt3.maxTokens": {
-          "type": "number",
-          "default": 4000,
-          "markdownDescription": "NOTE - THIS CONFIG IS NOW DISABLED, and might be totally removed in the future. If you think this config setting should stay, please comment it in the GitHub repository that you find it useful.",
-          "order": 37
-        },
         "chatgpt.gpt3.temperature": {
           "type": "number",
           "default": 1,
@@ -329,18 +323,6 @@
           "markdownDescription": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered. \n\nIt is recommended altering this or temperature but not both. [Documentation](https://beta.openai.com/docs/api-reference/completions/create#completions/create-top_p)",
           "order": 39
         },
-        "chatgpt.response.showNotification": {
-          "type": "boolean",
-          "default": false,
-          "description": "Choose whether you'd like to receive a notification when ChatGPT bot responds to your query.",
-          "order": 40
-        },
-        "chatgpt.response.autoScroll": {
-          "type": "boolean",
-          "default": true,
-          "description": "Whenever there is a new question or response added to the conversation window, extension will automatically scroll to the bottom. You can change that behavior by disabling this setting.",
-          "order": 41
-        },
         "chatgpt.systemContext": {
           "type": "string",
           "default": "You are ChatGPT helping the User with coding. You are intelligent, helpful and an expert developer, who always gives the correct answer and only does what instructed. If you show code, your response must always be markdown with any code inside markdown codeblocks. If the user is trying to do a bad programming practice, helpfully let them know and mention an alternative. When responding to the following prompt, please make sure to properly style your response using Github Flavored Markdown. Use markdown syntax for text like headings, lists, colored text, code blocks, highlights etc.",
@@ -351,18 +333,6 @@
           "default": 100,
           "description": "Stream throttling. Time in milliseconds between UI updates. Higher = ai responds in bigger chunks, but UI is more performant. Lower = ai responds in smaller chunks, but UI will look better, but is less performant. 0 will update the UI with every network request from OpenAI",
           "order": 43
-        },
-        "chatgpt.minimalUI": {
-          "type": "boolean",
-          "default": false,
-          "description": "If enabled, the buttons below the question input field and the chat tab is hidden.",
-          "order": 44
-        },
-        "chatgpt.disableMultipleConversations": {
-          "type": "boolean",
-          "default": false,
-          "description": "If enabled, this will disable the ability to have multiple conversations at the same time. This reduces the UI clutter of chat tabs.",
-          "order": 45
         },
         "chatgpt.verbosity": {
           "type": "string",

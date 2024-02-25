@@ -3,19 +3,32 @@ import markdownit from 'markdown-it';
 
 const vscode = acquireVsCodeApi();
 
-const DIV_TEMPLATE = `
+const TEXT_AREA = `
+    <textarea class="vscode chat-input-field" cols="20" resize="vertical" style="width:100%"></textarea>
+    <a class="vscode selection" data-command="toggle">+ Selection</a>
+    <select class="vscode verbosity">
+      <option value="code">code</option>
+      <option value="concise">concise</option>
+      <option value="normal" selected>normal</option>
+      <option value="full">full</option>
+    </select>
+    <select class="vscode model">
+      <option value="gpt-3-16k" selected>gpt-3-16k</option>
+      <option value="gpt-4">gpt-4</option>
+    </select>
+    <button style="margin-left:auto;" class="vscode primary" data-command="send" data-chatid="new"><i class='codicon--send'></i></button>`;
+const DIV_INPUT_TEMPLATE = `
     <div class="chat-input">
     <h2 class="title"><i class="icon you"></i>You</h2>
-    <textarea class="vscode chat-input-field" cols="20" resize="vertical" style="width:100%"></textarea>
-    <a class="vscode" data-command="toggle" id="selection">+ Selection</a>
-    <button style="margin-left:auto;" class="vscode primary" data-command="send" data-chatid="new"><i class='codicon--send'></i></button>
-    </div>
+    ${TEXT_AREA}
+    </div>`;
+const DIV_TEMPLATE = `
     <div class="chat-thinking" style="display:none">
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12,1A11,11,0,1,0,23,12,11,11,0,0,0,12,1Zm0,20a9,9,0,1,1,9-9A9,9,0,0,1,12,21Z" transform="matrix(0 0 0 0 12 12)"><animateTransform id="svgSpinnersPulseRingsMultiple0" attributeName="transform" begin="0;svgSpinnersPulseRingsMultiple2.end" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="translate" values="12 12;0 0"/><animateTransform additive="sum" attributeName="transform" begin="0;svgSpinnersPulseRingsMultiple2.end" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="scale" values="0;1"/><animate attributeName="opacity" begin="0;svgSpinnersPulseRingsMultiple2.end" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" values="1;0"/></path><path fill="currentColor" d="M12,1A11,11,0,1,0,23,12,11,11,0,0,0,12,1Zm0,20a9,9,0,1,1,9-9A9,9,0,0,1,12,21Z" transform="matrix(0 0 0 0 12 12)"><animateTransform id="svgSpinnersPulseRingsMultiple1" attributeName="transform" begin="svgSpinnersPulseRingsMultiple0.begin+0.2s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="translate" values="12 12;0 0"/><animateTransform additive="sum" attributeName="transform" begin="svgSpinnersPulseRingsMultiple0.begin+0.2s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="scale" values="0;1"/><animate attributeName="opacity" begin="svgSpinnersPulseRingsMultiple0.begin+0.2s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" values="1;0"/></path><path fill="currentColor" d="M12,1A11,11,0,1,0,23,12,11,11,0,0,0,12,1Zm0,20a9,9,0,1,1,9-9A9,9,0,0,1,12,21Z" transform="matrix(0 0 0 0 12 12)"><animateTransform id="svgSpinnersPulseRingsMultiple2" attributeName="transform" begin="svgSpinnersPulseRingsMultiple0.begin+0.4s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="translate" values="12 12;0 0"/><animateTransform additive="sum" attributeName="transform" begin="svgSpinnersPulseRingsMultiple0.begin+0.4s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="scale" values="0;1"/><animate attributeName="opacity" begin="svgSpinnersPulseRingsMultiple0.begin+0.4s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" values="1;0"/></path></svg>
     <span style="margin: auto 4px">thinking</span>
     <button class="vscode secondary" data-command="cancel" style='margin-left:auto'>cancel</button>
     </div>
-    <div id="bottom"></div>`;
+    <div class="bottom"></div>`;
 
 // Actual default values
 const md = markdownit({
@@ -46,14 +59,13 @@ function scroll_down(div_element: Element) {
   }, 20);
 }
 
-let current_conversation = 1;
 let conversations: { [index: number]: Element | undefined; } = {};
 
 function get_conversation(conversation_id: number) {
   let div_element = conversations[1 * conversation_id];
   if (!div_element) {
     div_element = conversations[1 * conversation_id] = document.createElement('DIV');
-    div_element.innerHTML = DIV_TEMPLATE;
+    div_element.innerHTML = DIV_INPUT_TEMPLATE + DIV_TEMPLATE;
     const dd = div_element.querySelector("div.chat-input");
     dd.dataset['conversation_id'] = "" + conversation_id;
     dd.dataset['nr'] = "new";
@@ -69,7 +81,6 @@ function close_conversation(conversation_id: number) {
 }
 
 function show_conversation(conversation_id: number) {
-  current_conversation = conversation_id;
   const div_element = get_conversation(conversation_id);
   document.getElementById("root")?.replaceChildren(div_element);
 }
@@ -92,7 +103,9 @@ function button_click(event: Event) {
         conversation_id: div.dataset['conversation_id'],
         chat_id: div.dataset['nr'],
         message: text,
-        includeEditorSelection: !!div.querySelector("[id=selection]")?.classList.contains('selected')
+        includeEditorSelection: !!div.querySelector("a.selection]")?.classList.contains('selected'),
+        verbosity: div.querySelector("select.verbosity").value,
+        model: div.querySelector("select.model").value,
       });
       break;
     }
@@ -162,7 +175,7 @@ function add_conversation(conversation_id: number, nr: number, role: string, con
   }
   let html_content = `<h2 class="title">${role_icon}${edit_icon}</h2>`;
   if (edit) {
-    html_content += `<textarea class="vscode" cols="20" id="chat-input-field" resize="vertical" style="width:100%"></textarea><br/><a class="vscode icon" data-command="send"><i class="codicon--send"></i></a>`;
+    html_content += TEXT_AREA;
   } else {
     html_content += md.render(content);
   }
@@ -208,6 +221,7 @@ function thinking(conversation_id: number) {
     div_element.querySelector("div.chat-input").style.display = "none";
     div_element.querySelector("div.chat-thinking").style.display = "flex";
     div_element.querySelector("textarea.chat-input-field").value = "";
+    div_element.querySelector("a.selection").classList.toggle('selected', false);
     scroll_down(div_element);
   }
 }

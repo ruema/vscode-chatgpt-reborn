@@ -240,6 +240,33 @@ a.vscode.selected {
   color: var(--vscode-button-foreground);
 }
 
+select.vscode {
+  display: inline-block;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  color: var(--vscode-icon-foreground);
+  padding: 3px;
+  border-radius: 5px;
+  white-space: nowrap;
+  text-decoration: none;
+  box-sizing: border-box;
+  appearance: none;
+  background: transparent;
+  border: none;
+  margin: 0;
+  width: fit-content;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+select.vscode:hover {
+  outline: 1px dashed var(--vscode-toolbar-hoverOutline);
+  outline-offset: -1px;
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
 vscode-divider {
   display: block;
   border-top: 1px solid var(--vscode-input-border);

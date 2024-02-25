@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import ChatGptViewProvider, { ApiRequestOptions } from './chatgpt-view-provider';
-import { Conversation, Verbosity } from "./renderer/types";
+import { Verbosity } from "./renderer/types";
 
 const menuCommands = ["generateCode", "adhoc"];
 
@@ -102,8 +102,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				code: code,
 				language: editor.document.languageId,
 			};
-			provider?.newChat2(0);
-			const conversation = provider?.conversations[0];
+			const conversation = provider?.newChat(10);
 			await provider?.sendApiRequest(conversation, prompt, options);
 		} else {
 			console.error('command - No current conversation found');
@@ -114,37 +113,25 @@ export async function activate(context: vscode.ExtensionContext) {
 	let chat_requests: ChatRequest[] = [];
 	const actionInlineCommand = vscode.commands.registerCommand('vscode-chatgpt.inlinecommand', async (prompt, code, selection, editor: vscode.TextEditor) => {
 		if (code && prompt) {
-			const title = 'inline';
-			const currentConversation = {
-				id: `${title}-${Date.now()}`,
-				title,
-				messages: [],
-				inProgress: false,
-				createdAt: Date.now(),
-				model: provider?.currentConversation?.model,
-				autoscroll: true,
-				verbosity: Verbosity.code
-			} as Conversation;
+			const options: ApiRequestOptions = {
+				code: code,
+				language: editor.document.languageId,
+				verbosity: Verbosity.code,
+			};
+			const conversation = provider?.newChat(10);
 
-			if (currentConversation) {
-				const request = new ChatRequest(editor, selection);
-				chat_requests.push(request);
-				const document = editor.document;
-				const msg = await provider?.sendApiRequest(prompt, {
-					command: 'command',
-					code: code,
-					language: document.languageId,
-					conversation: currentConversation,
-				});
-				// find the code to include
-				const match = msg?.match(/```.*?\n(.*?)\n```/s);
-				chat_requests.splice(chat_requests.indexOf(request));
-				if (match) {
-					request.edit(match[1]);
-				}
-			} else {
-				console.error('command - No current conversation found');
+			const request = new ChatRequest(editor, selection);
+			chat_requests.push(request);
+			const document = editor.document;
+			const msg = await provider?.sendApiRequest(conversation, prompt, options);
+			// find the code to include
+			const match = msg?.match(/```.*?\n(.*?)\n```/s);
+			chat_requests.splice(chat_requests.indexOf(request));
+			if (match) {
+				request.edit(match[1]);
 			}
+		} else {
+			console.error('command - No current conversation found');
 		}
 	});
 
@@ -185,17 +172,10 @@ export async function activate(context: vscode.ExtensionContext) {
 		});
 
 		if (value) {
-			const currentConversation = provider.currentConversation;
-
-			if (currentConversation) {
-				provider?.sendApiRequest(value, {
-					command: "freeText",
-					conversation: currentConversation,
-					language: vscode.window.activeTextEditor?.document.languageId,
-				});
-			} else {
-				console.error("freeText - No current conversation found");
-			}
+			const conversation = provider?.newChat(10);
+			await provider?.sendApiRequest(conversation, value, {
+				language: vscode.window.activeTextEditor?.document.languageId,
+			});
 		}
 	});
 
@@ -261,29 +241,22 @@ export async function activate(context: vscode.ExtensionContext) {
 				});
 
 			if (!dismissed && adhocCommandPrefix?.length > 0) {
-				const currentConversation = provider.currentConversation;
-
-				if (currentConversation) {
-					provider?.sendApiRequest(adhocCommandPrefix, {
-						command: "adhoc",
-						code: selection,
-						conversation: currentConversation,
-						language: editor.document.languageId,
-					});
-				} else {
-					console.error("adhoc - No current conversation found");
-				}
+				const conversation = provider?.newChat(10);
+				await provider?.sendApiRequest(conversation, adhocCommandPrefix, {
+					code: selection,
+					language: editor.document.languageId,
+				});
 			}
 		}
 	});
 
 	const generateCodeCommand = vscode.commands.registerCommand(`vscode-chatgpt.generateCode`, () => {
 		/*const editor = vscode.window.activeTextEditor;
-
+	
 		if (!editor) {
 			return;
 		}
-
+	
 		const selection = editor.document.getText(editor.selection);
 		if (selection) {
 			const options: ApiRequestOptions = {
@@ -303,7 +276,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	for (let i = 1; i <= 9; i++) {
 		context.subscriptions.push(
 			vscode.commands.registerCommand("vscode-chatgpt.viewChat" + i, async () => {
-				provider.set_chat(i);
+				provider.showChat(i);
 			}));
 	}
 

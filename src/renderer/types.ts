@@ -167,15 +167,21 @@ export enum Verbosity {
   full = "full"
 }
 
+export const VerbosityText = {
+  [Verbosity.code]: 'Do not include any explanations in your answer. Only respond with the code.',
+  [Verbosity.concise]: 'Your explanations should be as concise and to the point as possible, one or two sentences at most.',
+  [Verbosity.normal]: '',
+  [Verbosity.full]: 'You should give full explanations that are as detailed as possible.',
+};
+
+
 export interface Conversation {
-  id: string;
-  createdAt: string | number;
+  id: number;
+  position: number;
   inProgress: boolean;
   messages: Message[];
-  model: Model | undefined;
   title?: string;
   autoscroll: boolean;
-  verbosity?: Verbosity | undefined;
   // allow the user to switch tabs while working on a prompt
   userInput?: string;
   tokenCount?: {

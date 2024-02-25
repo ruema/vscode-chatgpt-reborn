@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ApiProvider } from "./api-provider";
-import { Conversation, Message, Model, Role, Verbosity } from "./renderer/types";
+import { Conversation, Message, Model, Role, Verbosity, VerbosityText } from "./renderer/types";
 
 /*
 import hljs from 'highlight.js';
@@ -24,12 +24,14 @@ export interface ApiRequestOptions {
 	topP?: number;
 	temperature?: number;
 	maxTokens?: number;
+	verbosity?: Verbosity;
+	model?: Model;
 }
 
 export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 	private webView?: vscode.WebviewView;
 	public subscribeToResponse: boolean;
-	public model?: string;
+	public model?: Model;
 
 	private api: ApiProvider = new ApiProvider();
 	private _temperature: number = 0.9;
@@ -38,26 +40,26 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 
 	private throttling: number = 100;
 	private abortControllers: {
-		conversationId?: string,
+		conversationId: number,
 		actionName?: string,
 		controller: AbortController;
 	}[] = [];
 	private chatGPTModels: Model[] = [];
 
-
-	public conversations: (Conversation | undefined)[] = [undefined, {
-		id: "1",
-		createdAt: "",
-		inProgress: false,
-		model: undefined,
-		autoscroll: true,
-		messages: []
-	}, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined];
+	public conversations: { [index: number]: Conversation; } = {
+		1: {
+			id: 1,
+			position: 1,
+			inProgress: false,
+			autoscroll: true,
+			messages: []
+		}
+	};
 	public currentConversation: number = 1;
 
 	constructor(private context: vscode.ExtensionContext) {
 		this.subscribeToResponse = vscode.workspace.getConfiguration("chatgpt").get("response.showNotification") || false;
-		this.model = vscode.workspace.getConfiguration("chatgpt").get("gpt3.model") as string;
+		this.model = vscode.workspace.getConfiguration("chatgpt").get("gpt3.model") as Model;
 		this.systemContext = vscode.workspace.getConfiguration('chatgpt').get('systemContext') ?? vscode.workspace.getConfiguration('chatgpt').get('systemContext.default') ?? '';
 		this.throttling = vscode.workspace.getConfiguration("chatgpt").get("throttling") || 100;
 
@@ -142,6 +144,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 				});
 				*/
 	}
+
 	/*
 		// Param is optional - if provided, it will change the API key to the provided value
 		// This func validates the API key against the OpenAI API (and notifies the webview of the result)
@@ -192,7 +195,8 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 			vscode.workspace.getConfiguration("chatgpt").update("gpt3.apiBaseUrl", apiUrl, true);
 		}
 	*/
-	public refresh_chat() {
+
+	public refreshChat() {
 		const conversation = this.conversations[this.currentConversation] as Conversation;
 		this.sendMessage({
 			type: "showConversation",
@@ -220,96 +224,117 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		}
 	}
 
-	public set_chat(chat_id: any) {
+	public setChat(chat_id: any) {
+		const conversation = this.conversations[1 * chat_id] as Conversation;
+		const pos = conversation.position;
 		if (this.webView) {
-			this.webView.title = "#" + chat_id;
+			this.webView.title = pos > 9 ? "ad hoc" : "#" + pos;
+		}
+		if (this.currentConversation !== 1 * chat_id) {
 			this.currentConversation = 1 * chat_id;
-			this.refresh_chat();
+			this.refreshChat();
 		}
 	}
 
-	public update_context() {
-		let text = "";
-		for (let i = 1; i <= 9; i++) {
-			if (this.conversations[i] !== undefined) {
-				text += i;
+	public showChat(position: any) {
+		position = 1 * position;
+		for (const conversation of Object.values(this.conversations)) {
+			if (conversation.position == position) {
+				this.setChat(conversation.id);
+				break;
 			}
 		}
+	}
+
+	private slots: string = "1";
+	public updateContext() {
+		let text = "";
+		for (const conversation of Object.values(this.conversations)) {
+			if (conversation.position <= 9) {
+				text += conversation.position;
+			}
+		}
+		this.slots = text;
 		vscode.commands.executeCommand('setContext', 'chatGPT.chat_ids', text);
 	}
 
-	public find_next_empty_conversation() {
-		let i = this.currentConversation + 1;
-		for (; i <= 9; i++) {
-			if (this.conversations[i] === undefined) {
+	public findEmptySlot() {
+		for (let i = 1; i <= 9; i++) {
+			if (this.slots.indexOf("" + i) < 0)
 				return i;
-			}
 		}
-		for (i = 1; i < this.currentConversation; i++) {
-			if (this.conversations[i] === undefined) {
+		return 10;
+	}
+	public findNextSlot(i: number) {
+		for (; i <= 9; i++) {
+			if (this.slots.indexOf("" + i) >= 0)
 				return i;
-			}
+		}
+		for (i = 1; i <= 9; i++) {
+			if (this.slots.indexOf("" + i) >= 0)
+				return i;
 		}
 		return 10;
 	}
 
-	public find_next_conversation() {
-		let i = this.currentConversation + 1;
-		for (; i <= 9; i++) {
-			if (this.conversations[i] !== undefined) {
-				return i;
-			}
-		}
-		for (i = 1; i < this.currentConversation; i++) {
-			if (this.conversations[i] !== undefined) {
-				return i;
-			}
-		}
-		return 10;
-	}
-
-	public newChat2(i: number) {
+	public newChat2(i: number, position: number) {
 		this.conversations[i] = {
-			id: "" + i,
-			createdAt: "",
+			id: i,
+			position: position,
 			inProgress: false,
-			model: undefined,
 			autoscroll: true,
 			messages: []
 		};
-		this.update_context();
-		this.set_chat(i);
+		this.updateContext();
+		this.setChat(i);
+		return this.conversations[i];
 	}
 
-	public newChat() {
-		const i = this.find_next_empty_conversation();
-		this.newChat2(i);
+	public newChat(position: number | undefined = undefined) {
+		if (position === undefined) {
+			position = this.findEmptySlot();
+		}
+		const toBeRemoved = [];
+		let maxId = 10;
+		for (const conversation of Object.values(this.conversations)) {
+			if (conversation.position >= 10 && !conversation.inProgress) {
+				toBeRemoved.push(conversation.id);
+				this.sendMessage({
+					type: "closeConversation",
+					conversationId: conversation.id,
+				});
+			} else {
+				if (maxId < conversation.id) {
+					maxId = conversation.id;
+				}
+			}
+		}
+		for (const i of toBeRemoved) {
+			delete this.conversations[i];
+		}
+		return this.newChat2(maxId + 1, position);
 	}
 
 	public closeChat() {
-		this.conversations[this.currentConversation] = undefined;
+		const position = this.conversations[this.currentConversation].position;
+		delete this.conversations[this.currentConversation];
 		this.sendMessage({
 			type: "closeConversation",
 			conversationId: this.currentConversation,
 		});
-		const i = this.find_next_conversation();
-		if (i == 10) {
-			this.currentConversation = 0;
+		const i = this.findNextSlot(position + 1);
+		if (i == 10 || i == position) {
 			this.newChat();
 		} else {
-			this.update_context();
-			this.set_chat(i);
+			this.updateContext();
+			this.showChat(i);
 		}
 	}
 
 	public clearChat() {
-		this.conversations[this.currentConversation] = undefined;
-		this.sendMessage({
-			type: "showConversation",
-			conversationId: this.currentConversation,
-		});
-		this.currentConversation -= 1;
-		this.newChat();
+		const position = this.conversations[this.currentConversation].position;
+		delete this.conversations[this.currentConversation];
+		this.newChat(position);
 	}
 
 	public resolveWebviewView(
@@ -334,10 +359,17 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 			console.log(data);
 			switch (data.type) {
 				case 'refreshChat':
-					this.refresh_chat();
+					this.refreshChat();
 					break;
 				case 'sendMessage': {
 					const conversation = this.conversations[data.conversation_id] as Conversation;
+					if (conversation.position >= 10) {
+						// convert ad hoc chat to normal chat
+						const pos = this.findEmptySlot();
+						conversation.position = pos;
+						this.updateContext();
+						this.setChat(conversation.id);
+					}
 					if (data.chat_id != 'new') {
 						conversation.messages.splice(data.chat_id + 1);
 						this.sendMessage({
@@ -346,7 +378,10 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 							nr: data.chat_id,
 						});
 					}
-					let options: ApiRequestOptions = {};
+					let options: ApiRequestOptions = {
+						model: data.model,
+						verbosity: data.verbosity,
+					};
 					if (data?.includeEditorSelection) {
 						const selection = this.getActiveEditorSelection();
 						options.code = selection?.content ?? "";
@@ -630,41 +665,20 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		}
 	}*/
 
-	private processQuestion(question: string, conversation: Conversation, code?: string, language?: string): string {
-		let verbosity = '';
-		switch (conversation.verbosity) {
-			case Verbosity.code:
-				verbosity = 'Do not include any explanations in your answer. Only respond with the code.';
-				break;
-			case Verbosity.concise:
-				verbosity = 'Your explanations should be as concise and to the point as possible, one or two sentences at most.';
-				break;
-			case Verbosity.full:
-				verbosity = 'You should give full explanations that are as detailed as possible.';
-				break;
-		}
+	private processQuestion(question: string, conversation: Conversation, verbosity: Verbosity, code?: string, language?: string): string {
+		const verbosityText = VerbosityText[verbosity];
+		question += `\n${verbosityText}`;
 
 		if (code !== null && code !== undefined) {
 			// If the lanague is not specified, get it from the active editor's language
 			if (!language) {
-				const editor = vscode.window.activeTextEditor;
-				if (editor) {
-					language = editor.document.languageId;
-				}
+				language = vscode.window.activeTextEditor?.document.languageId;
 			}
-
-			// if the language is still not specified, ask hljs to guess it
-			/*if (!language) {
-				const result = hljs.highlightAuto(code);
-				language = result.language;
-			}*/
-
-			// Add prompt prefix to the code if there was a code block selected
-			question = `${question}\n${verbosity} ${language ? ` The following code is in ${language} programming language.` : ''} Code in question:\n\n###\n\n\`\`\`${language}\n${code}\n\`\`\``;
-		} else {
-			question = `${question}\n${verbosity}`;
+			if (language) {
+				question += `\nThe following code is in ${language} programming language.`;
+			}
+			question += `\nCode in question:\n\`\`\`${language}\n${code}\n\`\`\``;
 		}
-
 		return question;
 	}
 
@@ -690,8 +704,9 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		} else {
 			this.webView?.show?.(true);
 		}
-		this.set_chat(conversation.id);
+		this.setChat(conversation.id);
 
+		conversation.inProgress = true;
 
 		// 1. First add the system message
 		if (conversation.messages.length === 0) {
@@ -705,18 +720,13 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		}
 
 		// 2. Add the user's question to the conversation
-		const formattedPrompt = this.processQuestion(prompt, conversation, options.code, options.language);
+		const formattedPrompt = this.processQuestion(prompt, conversation, options.verbosity || Verbosity.normal, options.code, options.language);
 		console.log(formattedPrompt);
 		console.log(prompt);
 		conversation.messages.push({
 			id: "1",
 			content: formattedPrompt,
-			rawContent: prompt,
-			questionCode: /*options?.code
-					? marked.parse(
-						`\`\`\`${options?.language}\n${options.code}\n\`\`\``
-					)
-					:*/ "",
+			rawContent: prompt + (options.code ? `\n\`\`\`${options.language}\n${options.code}\n\`\`\`` : ''),
 			role: Role.user,
 			createdAt: Date.now(),
 		});
@@ -726,7 +736,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 			type: "addChatMessage",
 			nr: conversation.messages.length - 1,
 			role: Role.user,
-			content: prompt,
+			content: conversation.messages[conversation.messages.length - 1].rawContent,
 			conversationId: conversation.id,
 		});
 
@@ -762,7 +772,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 			this.abortControllers.push({ conversationId: conversation.id, controller });
 
 			// Stream ChatGPT response (this is using an async iterator)
-			for await (const token of this.api.streamChatCompletion(conversation, controller.signal, {
+			for await (const token of this.api.streamChatCompletion(conversation, controller.signal, options.model || this.model || Model.gpt_35_turbo_16k, {
 				temperature: this._temperature,
 				topP: this._topP,
 			})) {
@@ -810,11 +820,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 				vscode.window.showInformationMessage("It looks like ChatGPT didn't complete their answer for your coding question. You can ask it to continue and combine the answers.", "Continue and combine answers")
 					.then(async (choice) => {
 						if (choice === "Continue and combine answers") {
-							this.sendApiRequest(conversation, "Continue", /*{
-								command: options.command,
-								conversation: options.conversation,
-								code: undefined,
-							}*/);
+							this.sendApiRequest(conversation, "Continue", {});
 						}
 					});
 			}
@@ -878,6 +884,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 				conversationId: conversation.id,
 				inProgress: false,
 			});
+			conversation.inProgress = false;
 		}
 	}
 
@@ -886,7 +893,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 	 * @param message Message to be sent to WebView
 	 * @param ignoreMessageIfNullWebView We will ignore the command if webView is null / not - focused
 	*/
-	public sendMessage(message: any, ignoreMessageIfNullWebView?: boolean) {
+	public sendMessage(message: any) {
 		if (this.webView) {
 			this.webView?.webview.postMessage(message);
 		}
@@ -965,4 +972,4 @@ console.error(eventName, {
 			language
 		};
 	}
-}
+};
