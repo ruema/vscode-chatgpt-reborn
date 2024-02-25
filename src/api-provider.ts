@@ -50,7 +50,7 @@ export class ApiProvider {
   }
 
   // OpenAI's library doesn't support streaming, but great workaround from @danneu - https://github.com/openai/openai-node/issues/18#issuecomment-1483808526
-  async* streamChatCompletion(conversation: Conversation, abortSignal: AbortSignal, {
+  async* streamChatCompletion(conversation: Conversation, abortSignal: AbortSignal, model: Model, {
     temperature = this._temperature,
     topP = this._topP,
   }: {
@@ -123,12 +123,12 @@ export class ApiProvider {
     return encoding_for_model(adjustedModel as TiktokenModel);
   }
 
-  public static countConversationTokens(conversation: Conversation): number {
-    const enc = this.getEncodingForModel(conversation.model ?? Model.gpt_35_turbo);
+  public static countConversationTokens(conversation: Conversation, model: Model): number {
+    const enc = this.getEncodingForModel(model ?? Model.gpt_35_turbo);
     let tokensUsed = 0;
 
     for (const message of conversation.messages) {
-      tokensUsed += ApiProvider.countMessageTokens(message, conversation.model ?? Model.gpt_35_turbo, enc);
+      tokensUsed += ApiProvider.countMessageTokens(message, model ?? Model.gpt_35_turbo, enc);
     }
 
     tokensUsed += 3; // every reply is primed with <im_start>assistant

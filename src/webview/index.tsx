@@ -3,6 +3,9 @@ import markdownit from 'markdown-it';
 
 const vscode = acquireVsCodeApi();
 
+let model = "gpt-3.5-turbo";
+let verbosity = "normal";
+
 const TEXT_AREA = `
     <textarea class="vscode chat-input-field" cols="20" resize="vertical" style="width:100%"></textarea>
     <a class="vscode selection" data-command="toggle">+ Selection</a>
@@ -13,8 +16,8 @@ const TEXT_AREA = `
       <option value="full">full</option>
     </select>
     <select class="vscode model">
-      <option value="gpt-3-16k" selected>gpt-3-16k</option>
-      <option value="gpt-4">gpt-4</option>
+      <option value="gpt-3.5-turbo" selected>GPT-3.5 Turbo</option>
+      <option value="gpt-4">GPT-4</option>
     </select>
     <button style="margin-left:auto;" class="vscode primary" data-command="send" data-chatid="new"><i class='codicon--send'></i></button>`;
 const DIV_INPUT_TEMPLATE = `
@@ -117,6 +120,8 @@ function button_click(event: Event) {
         div.dataset['nr'],
         div.dataset['role'],
         div.dataset['content'],
+        div.dataset['verbosity'],
+        div.dataset['model'],
         command === "edit"
       );
       break;
@@ -165,7 +170,7 @@ function button_click(event: Event) {
 }
 
 
-function add_conversation(conversation_id: number, nr: number, role: string, content: string, edit: boolean) {
+function add_conversation(conversation_id: number, nr: number, role: string, content: string, verbosity: string, model: string, edit: boolean) {
   const div_element = get_conversation(conversation_id);
   const role_icon = role == 'user' ? '<i class="codicon--account"></i>You' : '<i class="codicon--chatgpt"></i>ChatGPT';
   let edit_icon = '';
@@ -203,8 +208,12 @@ function add_conversation(conversation_id: number, nr: number, role: string, con
   div.dataset['nr'] = "" + nr;
   div.dataset['role'] = role;
   div.dataset['content'] = content;
+  div.dataset['verbosity'] = verbosity;
+  div.dataset['model'] = model;
   if (edit) {
     div.querySelector('textarea').value = content;
+    div.querySelector("select.verbosity").value = verbosity;
+    div.querySelector("select.model").value = model;
   }
 }
 
@@ -258,7 +267,7 @@ window.addEventListener("message", (event) => {
       truncate(event.data.conversationId, event.data.nr);
       break;
     case "addChatMessage":
-      add_conversation(event.data.conversationId, event.data.nr, event.data.role, event.data.content, false);
+      add_conversation(event.data.conversationId, event.data.nr, event.data.role, event.data.content, event.data.verbosity, event.data.model, false);
       break;
     case "showInProgress":
       if (event.data.inProgress) {
@@ -273,6 +282,11 @@ window.addEventListener("message", (event) => {
     case "closeConversation":
       close_conversation(event.data.conversationId);
       break;
+    case "updateSettings":
+      model = event.data.model;
+      verbosity = event.data.verbosity;
+      document.querySelector("div.chat-input select.verbosity").value = verbosity;
+      document.querySelector("div.chat-input select.model").value = model;
   }
 });
 

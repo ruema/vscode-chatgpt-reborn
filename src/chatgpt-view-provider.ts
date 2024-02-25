@@ -2,18 +2,6 @@ import * as vscode from 'vscode';
 import { ApiProvider } from "./api-provider";
 import { Conversation, Message, Model, Role, Verbosity, VerbosityText } from "./renderer/types";
 
-/*
-import hljs from 'highlight.js';
-import { marked } from "marked";
-import { v4 as uuidv4 } from "uuid";
-import { ActionRunner } from "./actionRunner";
-import { loadTranslations } from './localization';
-import { unEscapeHTML } from "./renderer/utils";
-
-
-// At the moment, gpt-4-1106-preview means "GPT-4 Turbo"
-const CHATGPT_MODELS = ['gpt-3.5-turbo', 'gpt-3.5-turbo-16k', 'gpt-4-1106-preview', 'gpt-4', 'gpt-4-32k'];
-*/
 export interface ApiRequestOptions {
 	command?: string,
 	conversation?: Conversation,
@@ -32,6 +20,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 	private webView?: vscode.WebviewView;
 	public subscribeToResponse: boolean;
 	public model?: Model;
+	public verbosity?: Verbosity;
 
 	private api: ApiProvider = new ApiProvider();
 	private _temperature: number = 0.9;
@@ -60,6 +49,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 	constructor(private context: vscode.ExtensionContext) {
 		this.subscribeToResponse = vscode.workspace.getConfiguration("chatgpt").get("response.showNotification") || false;
 		this.model = vscode.workspace.getConfiguration("chatgpt").get("gpt3.model") as Model;
+		this.verbosity = vscode.workspace.getConfiguration("chatgpt").get("verbosity") as Verbosity;
 		this.systemContext = vscode.workspace.getConfiguration('chatgpt').get('systemContext') ?? vscode.workspace.getConfiguration('chatgpt').get('systemContext.default') ?? '';
 		this.throttling = vscode.workspace.getConfiguration("chatgpt").get("throttling") || 100;
 
@@ -79,70 +69,75 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 				temperature: vscode.workspace.getConfiguration("chatgpt").get("gpt3.temperature") as number,
 				topP: vscode.workspace.getConfiguration("chatgpt").get("gpt3.top_p") as number,
 			});
+
+		// Update data members when the config settings change
+		vscode.workspace.onDidChangeConfiguration((e) => {
+			let rebuildApiProvider = false;
+
+			// Model
+			if (e.affectsConfiguration("chatgpt.gpt3.model") || e.affectsConfiguration("chatgpt.verbosity")) {
+				this.model = vscode.workspace.getConfiguration("chatgpt").get("gpt3.model") as Model;
+				this.verbosity = vscode.workspace.getConfiguration("chatgpt").get("verbosity") as Verbosity;
+				this.sendMessage({
+					type: "updateSettings",
+					model: this.model,
+					verbosity: this.verbosity,
+				});
+			}
+
+			// System Context
+			if (e.affectsConfiguration("chatgpt.systemContext")) {
+				this.systemContext = vscode.workspace.getConfiguration('chatgpt').get('systemContext') ?? vscode.workspace.getConfiguration('chatgpt').get('systemContext.default') ?? '';
+			}
+			// Throttling
+			if (e.affectsConfiguration("chatgpt.throttling")) {
+				this.throttling = vscode.workspace.getConfiguration("chatgpt").get("throttling") ?? 100;
+			}
+			// Api Base Url
+			if (e.affectsConfiguration("chatgpt.gpt3.apiBaseUrl")) {
+				rebuildApiProvider = true;
+			}
+			// temperature
+			if (e.affectsConfiguration("chatgpt.gpt3.temperature")) {
+				this._temperature = vscode.workspace.getConfiguration("chatgpt").get("gpt3.temperature") as number ?? 0.9;
+				rebuildApiProvider = true;
+			}
+			// topP
+			if (e.affectsConfiguration("chatgpt.gpt3.top_p")) {
+				this._topP = vscode.workspace.getConfiguration("chatgpt").get("gpt3.top_p") as number ?? 1;
+				rebuildApiProvider = true;
+			}
+
+			if (rebuildApiProvider) {
+				this.api = new ApiProvider(
+					{
+						apiBaseUrl: vscode.workspace.getConfiguration("chatgpt").get("gpt3.apiBaseUrl") as string,
+						temperature: vscode.workspace.getConfiguration("chatgpt").get("gpt3.temperature") as number,
+						topP: vscode.workspace.getConfiguration("chatgpt").get("gpt3.top_p") as number,
+					});
+			}
+		});
 		/*
-				// Update data members when the config settings change
-				vscode.workspace.onDidChangeConfiguration((e) => {
-					let rebuildApiProvider = false;
-		
-					// Model
-					if (e.affectsConfiguration("chatgpt.gpt3.model")) {
-						this.model = vscode.workspace.getConfiguration("chatgpt").get("gpt3.model") as string;
-					}
-					// System Context
-					if (e.affectsConfiguration("chatgpt.systemContext")) {
-						this.systemContext = vscode.workspace.getConfiguration('chatgpt').get('systemContext') ?? vscode.workspace.getConfiguration('chatgpt').get('systemContext.default') ?? '';
-					}
-					// Throttling
-					if (e.affectsConfiguration("chatgpt.throttling")) {
-						this.throttling = vscode.workspace.getConfiguration("chatgpt").get("throttling") ?? 100;
-					}
-					// Api Base Url
-					if (e.affectsConfiguration("chatgpt.gpt3.apiBaseUrl")) {
-						this.api.updateApiBaseUrl(vscode.workspace.getConfiguration("chatgpt").get("gpt3.apiBaseUrl") ?? "");
-						rebuildApiProvider = true;
-					}
-					// * EXPERIMENT: Turn off maxTokens
-					//   Due to how extension settings work, the setting will default to the 1,024 setting
-					//   from a very long time ago. New models support 128,000 tokens, but you have to tell the
-					//   user to update their config to "enable" these larger contexts. With the updated UI
-					//   now showing token counts, I think it's better to just turn off the maxTokens setting
-					// if (e.affectsConfiguration("chatgpt.gpt3.maxTokens")) {
-					// 	this.api.maxTokens = this._maxTokens = vscode.workspace.getConfiguration("chatgpt").get("gpt3.maxTokens") as number ?? 2048;
-					// }
-					// temperature
-					if (e.affectsConfiguration("chatgpt.gpt3.temperature")) {
-						this.api.temperature = this._temperature = vscode.workspace.getConfiguration("chatgpt").get("gpt3.temperature") as number ?? 0.9;
-					}
-					// topP
-					if (e.affectsConfiguration("chatgpt.gpt3.top_p")) {
-						this.api.topP = this._topP = vscode.workspace.getConfiguration("chatgpt").get("gpt3.top_p") as number ?? 1;
-					}
-		
-					if (rebuildApiProvider) {
-						this.rebuildApiProvider();
-					}
+		// if any of the extension settings change, send a message to the webview for the "settingsUpdate" event
+		vscode.workspace.onDidChangeConfiguration((e) => {
+			if (e.affectsConfiguration("chatgpt")) {
+				this.sendMessage({
+					type: "settingsUpdate",
+					value: vscode.workspace.getConfiguration("chatgpt")
 				});
-		
-				// if any of the extension settings change, send a message to the webview for the "settingsUpdate" event
-				vscode.workspace.onDidChangeConfiguration((e) => {
-					if (e.affectsConfiguration("chatgpt")) {
-						this.sendMessage({
-							type: "settingsUpdate",
-							value: vscode.workspace.getConfiguration("chatgpt")
-						});
-					}
-				});
-		
-				// Load translations
-				loadTranslations(context.extensionPath).then((translations) => {
-					// Serialize and send translations to the webview
-					const serializedTranslations = JSON.stringify(translations);
-		
-					this.sendMessage({ type: 'setTranslations', value: serializedTranslations });
-				}).catch((err) => {
-					console.error("Failed to load translations", err);
-				});
-				*/
+			}
+		});
+
+		// Load translations
+		loadTranslations(context.extensionPath).then((translations) => {
+			// Serialize and send translations to the webview
+			const serializedTranslations = JSON.stringify(translations);
+
+			this.sendMessage({ type: 'setTranslations', value: serializedTranslations });
+		}).catch((err) => {
+			console.error("Failed to load translations", err);
+		});
+				*/;
 	}
 
 	/*
@@ -199,6 +194,11 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 	public refreshChat() {
 		const conversation = this.conversations[this.currentConversation] as Conversation;
 		this.sendMessage({
+			type: "updateSettings",
+			model: this.model,
+			verbosity: this.verbosity,
+		});
+		this.sendMessage({
 			type: "showConversation",
 			conversationId: this.currentConversation,
 		});
@@ -220,6 +220,8 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 				nr: i,
 				role: msg.role,
 				content: msg.rawContent,
+				verbosity: msg.verbosity,
+				model: msg.model,
 			});
 		}
 	}
@@ -711,11 +713,9 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		// 1. First add the system message
 		if (conversation.messages.length === 0) {
 			conversation.messages.push({
-				id: "1",
 				content: this.systemContext,
 				rawContent: this.systemContext,
 				role: Role.system,
-				createdAt: Date.now(),
 			});
 		}
 
@@ -723,21 +723,24 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		const formattedPrompt = this.processQuestion(prompt, conversation, options.verbosity || Verbosity.normal, options.code, options.language);
 		console.log(formattedPrompt);
 		console.log(prompt);
-		conversation.messages.push({
-			id: "1",
+		const msg = {
 			content: formattedPrompt,
 			rawContent: prompt + (options.code ? `\n\`\`\`${options.language}\n${options.code}\n\`\`\`` : ''),
 			role: Role.user,
-			createdAt: Date.now(),
-		});
+			verbosity: options.verbosity,
+			model: options.model,
+		};
+		conversation.messages.push(msg);
 
 		// 3. Tell the webview about the new messages
 		this.sendMessage({
 			type: "addChatMessage",
 			nr: conversation.messages.length - 1,
 			role: Role.user,
-			content: conversation.messages[conversation.messages.length - 1].rawContent,
+			content: msg.rawContent,
 			conversationId: conversation.id,
+			verbosity: msg.verbosity,
+			model: msg.model,
 		});
 
 		// Tell the webview that this conversation is in progress
@@ -750,11 +753,9 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		try {
 			const message: Message = {
 				// Normally random ID is generated, but when editing a question, the response update the same message
-				id: "1",
 				content: '',
 				rawContent: '',
 				role: Role.assistant,
-				createdAt: Date.now(),
 			};
 			conversation.messages.push(message);
 
