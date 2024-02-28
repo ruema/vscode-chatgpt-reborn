@@ -9,20 +9,28 @@ class ChatRequest {
 	document: vscode.TextDocument;
 	start: number;
 	end: number;
-	constructor(editor: vscode.TextEditor, selection: vscode.Selection) {
+	use_diff: boolean;
+
+	constructor(editor: vscode.TextEditor, selection: vscode.Selection, use_diff: boolean) {
 		this.editor = editor;
 		this.document = editor.document;
 		this.start = this.document.offsetAt(selection.start);
 		this.end = this.document.offsetAt(selection.end);
+		this.use_diff = use_diff;
 	}
 	public edit(new_code: string) {
 		this.editor.edit(async editBuilder => {
-			const text = this.document?.getText();
-			const left_uri = vscode.Uri.parse('chatgpt-diff:previous').with({ fragment: text });
-			const right_uri = this.document.uri;
-			const range = new vscode.Range(this.document.positionAt(this.start), this.document.positionAt(this.end));
-			editBuilder.replace(range, new_code);
-			const success = await vscode.commands.executeCommand('vscode.diff', left_uri, right_uri);
+			if (this.use_diff) {
+				const text = this.document?.getText();
+				const left_uri = vscode.Uri.parse('chatgpt-diff:previous').with({ fragment: text });
+				const right_uri = this.document.uri;
+				const range = new vscode.Range(this.document.positionAt(this.start), this.document.positionAt(this.end));
+				editBuilder.replace(range, new_code);
+				const success = await vscode.commands.executeCommand('vscode.diff', left_uri, right_uri);
+			} else {
+				const range = new vscode.Range(this.document.positionAt(this.start), this.document.positionAt(this.end));
+				editBuilder.replace(range, new_code);
+			}
 		});
 	}
 }
@@ -109,27 +117,30 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	async function inline_complete(prompt: string, code: string, selection: vscode.Selection, editor: vscode.TextEditor, use_diff: boolean) {
+		const options: ApiRequestOptions = {
+			code: code,
+			language: editor.document.languageId,
+			verbosity: Verbosity.code,
+		};
+		const conversation = provider?.newChat(10);
+
+		const request = new ChatRequest(editor, selection, use_diff);
+		chat_requests.push(request);
+		const document = editor.document;
+		const msg = await provider?.sendApiRequest(conversation, prompt, options);
+		// find the code to include
+		const match = msg?.match(/```.*?\n(.*?)\n```/s);
+		chat_requests.splice(chat_requests.indexOf(request));
+		if (match) {
+			request.edit(match[1]);
+		}
+	}
 
 	let chat_requests: ChatRequest[] = [];
 	const actionInlineCommand = vscode.commands.registerCommand('vscode-chatgpt.inlinecommand', async (prompt, code, selection, editor: vscode.TextEditor) => {
 		if (code && prompt) {
-			const options: ApiRequestOptions = {
-				code: code,
-				language: editor.document.languageId,
-				verbosity: Verbosity.code,
-			};
-			const conversation = provider?.newChat(10);
-
-			const request = new ChatRequest(editor, selection);
-			chat_requests.push(request);
-			const document = editor.document;
-			const msg = await provider?.sendApiRequest(conversation, prompt, options);
-			// find the code to include
-			const match = msg?.match(/```.*?\n(.*?)\n```/s);
-			chat_requests.splice(chat_requests.indexOf(request));
-			if (match) {
-				request.edit(match[1]);
-			}
+			await inline_complete(prompt, code, selection, editor, true);
 		} else {
 			console.error('command - No current conversation found');
 		}
@@ -191,7 +202,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	const exportConversation = vscode.commands.registerCommand("vscode-chatgpt.exportConversation", async () => {
 		const currentConversation = provider.currentConversation;
-		provider?.sendMessage({ type: 'exportToMarkdown', conversation: currentConversation }, true);
+		provider?.sendMessage({ type: 'exportToMarkdown', conversation: currentConversation });
 	});
 
 	const clearSession = vscode.commands.registerCommand("vscode-chatgpt.clearSession", () => {
@@ -250,23 +261,23 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	const generateCodeCommand = vscode.commands.registerCommand(`vscode-chatgpt.generateCode`, () => {
-		/*const editor = vscode.window.activeTextEditor;
-	
+	const generateCodeCommand = vscode.commands.registerCommand(`vscode-chatgpt.generateCode`, async () => {
+		const editor = vscode.window.activeTextEditor;
+
 		if (!editor) {
 			return;
 		}
-	
-		const selection = editor.document.getText(editor.selection);
-		if (selection) {
-			const options: ApiRequestOptions = {
-				code: selection, language: editor.document.languageId
-			};
-			await provider?.sendApiRequest(conversation, data.message, options);
+		let selection: any = editor.selection;
+		if (selection.isEmpty) {
+			selection = editor.document.lineAt(editor.selection.active.line).range;
+		}
+
+		const code = editor.document.getText(selection);
+		if (code) {
+			await inline_complete("generate code", code, selection, editor, false);
 		} else {
 			console.error("generateCode - No current conversation found");
 		}
-	}*/
 	});
 
 	context.subscriptions.push(view, actionProvider, actionCommand, actionInlineCommand,

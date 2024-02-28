@@ -1,9 +1,8 @@
 import fs from "fs";
 import upath from 'upath';
-import { v4 as uuidv4 } from "uuid";
 import vscode from 'vscode';
 import { ApiProvider } from "./api-provider";
-import { ActionNames, Conversation, Message, Model, Role } from "./renderer/types";
+import { ActionNames } from "./renderer/types";
 import { listItems } from "./utils";
 
 export class ActionRunner {
@@ -34,6 +33,7 @@ class Action {
 
   // async iterator
   protected async* streamChatCompletion(apiProvider: ApiProvider, systemContext: string, prompt: string, abortSignal: AbortSignal): AsyncGenerator<any, any, unknown> {
+    /*
     const systemMessage: Message = {
       id: uuidv4(),
       content: systemContext,
@@ -51,17 +51,15 @@ class Action {
     };
 
     const conversation: Conversation = {
-      id: uuidv4(),
       messages: [systemMessage, message],
-      createdAt: Date.now(),
       inProgress: true,
-      model: Model.gpt_35_turbo,
       autoscroll: true,
     };
 
-    for await (const token of apiProvider.streamChatCompletion(conversation, abortSignal)) {
+    for await (const token of apiProvider.streamChatCompletion(conversation, abortSignal, model) as any) {
       yield token;
     }
+    */
   }
 
   public run(apiProvider: ApiProvider,

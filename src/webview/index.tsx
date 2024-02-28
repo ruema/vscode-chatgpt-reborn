@@ -17,25 +17,25 @@ const TEXT_AREA = `
     </select>
     <select class="vscode model">
       <option value="gpt-3.5-turbo" selected>GPT-3.5 Turbo</option>
-      <option value="gpt-4">GPT-4</option>
+      <option value="gpt-4-32k">GPT-4 32K</option>
     </select>
     <button style="margin-left:auto;" class="vscode primary" data-command="send" data-chatid="new"><i class='codicon--send'></i></button>`;
 const DIV_INPUT_TEMPLATE = `
     <div class="chat-input">
-    <h2 class="title"><i class="icon you"></i>You</h2>
+    <h2 class="title"><i class="codicon--account"></i>You</h2>
     ${TEXT_AREA}
     </div>`;
 const DIV_TEMPLATE = `
     <div class="chat-thinking" style="display:none">
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="currentColor" d="M12,1A11,11,0,1,0,23,12,11,11,0,0,0,12,1Zm0,20a9,9,0,1,1,9-9A9,9,0,0,1,12,21Z" transform="matrix(0 0 0 0 12 12)"><animateTransform id="svgSpinnersPulseRingsMultiple0" attributeName="transform" begin="0;svgSpinnersPulseRingsMultiple2.end" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="translate" values="12 12;0 0"/><animateTransform additive="sum" attributeName="transform" begin="0;svgSpinnersPulseRingsMultiple2.end" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="scale" values="0;1"/><animate attributeName="opacity" begin="0;svgSpinnersPulseRingsMultiple2.end" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" values="1;0"/></path><path fill="currentColor" d="M12,1A11,11,0,1,0,23,12,11,11,0,0,0,12,1Zm0,20a9,9,0,1,1,9-9A9,9,0,0,1,12,21Z" transform="matrix(0 0 0 0 12 12)"><animateTransform id="svgSpinnersPulseRingsMultiple1" attributeName="transform" begin="svgSpinnersPulseRingsMultiple0.begin+0.2s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="translate" values="12 12;0 0"/><animateTransform additive="sum" attributeName="transform" begin="svgSpinnersPulseRingsMultiple0.begin+0.2s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="scale" values="0;1"/><animate attributeName="opacity" begin="svgSpinnersPulseRingsMultiple0.begin+0.2s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" values="1;0"/></path><path fill="currentColor" d="M12,1A11,11,0,1,0,23,12,11,11,0,0,0,12,1Zm0,20a9,9,0,1,1,9-9A9,9,0,0,1,12,21Z" transform="matrix(0 0 0 0 12 12)"><animateTransform id="svgSpinnersPulseRingsMultiple2" attributeName="transform" begin="svgSpinnersPulseRingsMultiple0.begin+0.4s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="translate" values="12 12;0 0"/><animateTransform additive="sum" attributeName="transform" begin="svgSpinnersPulseRingsMultiple0.begin+0.4s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" type="scale" values="0;1"/><animate attributeName="opacity" begin="svgSpinnersPulseRingsMultiple0.begin+0.4s" calcMode="spline" dur="1.2s" keySplines=".52,.6,.25,.99" values="1;0"/></path></svg>
     <span style="margin: auto 4px">thinking</span>
-    <button class="vscode secondary" data-command="cancel" style='margin-left:auto'>cancel</button>
+    <!--<button class="vscode secondary" data-command="cancel" style='margin-left:auto'>cancel</button>-->
     </div>
     <div class="bottom"></div>`;
 
 // Actual default values
-const md = markdownit({
-  highlight: function (str, lang) {
+const md: any = markdownit({
+  highlight: function (str: any, lang: any) {
     let code = undefined;
     if (lang && hljs.getLanguage(lang)) {
       try {
@@ -69,9 +69,11 @@ function get_conversation(conversation_id: number) {
   if (!div_element) {
     div_element = conversations[1 * conversation_id] = document.createElement('DIV');
     div_element.innerHTML = DIV_INPUT_TEMPLATE + DIV_TEMPLATE;
-    const dd = div_element.querySelector("div.chat-input");
+    const dd = div_element.querySelector("div.chat-input") as any;
     dd.dataset['conversation_id'] = "" + conversation_id;
     dd.dataset['nr'] = "new";
+    (dd.querySelector("select.verbosity") as any).value = verbosity;
+    (dd.querySelector("select.model") as any).value = model;
   }
   return div_element;
 }
@@ -80,7 +82,7 @@ function close_conversation(conversation_id: number) {
   const div_element = conversations[1 * conversation_id];
   if (div_element)
     div_element.remove();
-  conversations[1 * conversation_id] = undefined;
+  delete conversations[1 * conversation_id];
 }
 
 function show_conversation(conversation_id: number) {
@@ -91,7 +93,7 @@ function show_conversation(conversation_id: number) {
 
 
 function button_click(event: Event) {
-  const button = event.target?.closest('button') || event.target?.closest('a');
+  const button = (event.target as any)?.closest('button') || (event.target as any)?.closest('a');
   if (!button) return;
   const command = button.dataset['command'];
   switch (command) {
@@ -103,10 +105,10 @@ function button_click(event: Event) {
       const text = div.querySelector('textarea').value;
       vscode.postMessage({
         type: "sendMessage",
-        conversation_id: div.dataset['conversation_id'],
+        conversation_id: 1 * div.dataset['conversation_id'],
         chat_id: div.dataset['nr'],
         message: text,
-        includeEditorSelection: !!div.querySelector("a.selection]")?.classList.contains('selected'),
+        includeEditorSelection: !!div.querySelector("a.selection")?.classList.contains('selected'),
         verbosity: div.querySelector("select.verbosity").value,
         model: div.querySelector("select.model").value,
       });
@@ -191,10 +193,10 @@ function add_conversation(conversation_id: number, nr: number, role: string, con
     div = document.createElement('div');
     div.id = divid;
     let previous_div = undefined;
-    for (const dd of div_element?.childNodes) {
+    for (const dd of (div_element?.childNodes as any)) {
       if (dd.tagName === "DIV") {
         const match = /chat\d+_(\d+)/.exec(dd.id);
-        if (!match || match[1] * 1 > nr) {
+        if (!match || (match[1] as any) * 1 > nr) {
           previous_div = dd;
           break;
         }
@@ -211,9 +213,9 @@ function add_conversation(conversation_id: number, nr: number, role: string, con
   div.dataset['verbosity'] = verbosity;
   div.dataset['model'] = model;
   if (edit) {
-    div.querySelector('textarea').value = content;
-    div.querySelector("select.verbosity").value = verbosity;
-    div.querySelector("select.model").value = model;
+    (div.querySelector('textarea') as any).value = content;
+    (div.querySelector("select.verbosity") as any).value = verbosity;
+    (div.querySelector("select.model") as any).value = model;
   }
 }
 
@@ -225,7 +227,7 @@ function main() {
 }
 
 function thinking(conversation_id: number) {
-  const div_element = get_conversation(conversation_id);
+  const div_element = get_conversation(conversation_id) as any;
   if (div_element) {
     div_element.querySelector("div.chat-input").style.display = "none";
     div_element.querySelector("div.chat-thinking").style.display = "flex";
@@ -238,8 +240,8 @@ function thinking(conversation_id: number) {
 function finish(conversation_id: number) {
   const div_element = get_conversation(conversation_id);
   if (div_element) {
-    div_element.querySelector("div.chat-input").style.display = "block";
-    div_element.querySelector("div.chat-thinking").style.display = "none";
+    (div_element.querySelector("div.chat-input") as any).style.display = "block";
+    (div_element.querySelector("div.chat-thinking") as any).style.display = "none";
     scroll_down(div_element);
   }
 }
@@ -249,9 +251,9 @@ function truncate(conversation_id: number, nr: number) {
   const divs = div_element.childNodes;
   for (let i = divs.length - 1; i >= 0; i--) {
     const dd = divs[i];
-    if (dd.tagName === "DIV") {
-      const match = /chat\d+_(\d+)/.exec(dd.id);
-      if (match && match[1] * 1 >= nr) {
+    if ((dd as any).tagName === "DIV") {
+      const match = /chat\d+_(\d+)/.exec((dd as any).id);
+      if (match && ((match[1] as any) * 1) >= nr) {
         dd.remove();
       }
     }
@@ -259,7 +261,7 @@ function truncate(conversation_id: number, nr: number) {
 }
 
 window.addEventListener("message", (event) => {
-  console.log(event);
+  // console.log(event);
   const command = event.data.type;
 
   switch (command) {
@@ -285,8 +287,9 @@ window.addEventListener("message", (event) => {
     case "updateSettings":
       model = event.data.model;
       verbosity = event.data.verbosity;
-      document.querySelector("div.chat-input select.verbosity").value = verbosity;
-      document.querySelector("div.chat-input select.model").value = model;
+      (document.querySelector("div.chat-input select.verbosity") as any).value = event.data.verbosity;
+      (document.querySelector("div.chat-input select.model") as any).value = event.data.model;
+      break;
   }
 });
 

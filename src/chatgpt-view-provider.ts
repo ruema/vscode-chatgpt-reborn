@@ -95,26 +95,16 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 			}
 			// Api Base Url
 			if (e.affectsConfiguration("chatgpt.gpt3.apiBaseUrl")) {
-				rebuildApiProvider = true;
+				this.api.updateApiBaseUrl(vscode.workspace.getConfiguration("chatgpt").get("gpt3.apiBaseUrl") ?? "");
 			}
+
 			// temperature
 			if (e.affectsConfiguration("chatgpt.gpt3.temperature")) {
-				this._temperature = vscode.workspace.getConfiguration("chatgpt").get("gpt3.temperature") as number ?? 0.9;
-				rebuildApiProvider = true;
+				this.api.temperature = this._temperature = vscode.workspace.getConfiguration("chatgpt").get("gpt3.temperature") as number ?? 0.9;
 			}
 			// topP
 			if (e.affectsConfiguration("chatgpt.gpt3.top_p")) {
-				this._topP = vscode.workspace.getConfiguration("chatgpt").get("gpt3.top_p") as number ?? 1;
-				rebuildApiProvider = true;
-			}
-
-			if (rebuildApiProvider) {
-				this.api = new ApiProvider(
-					{
-						apiBaseUrl: vscode.workspace.getConfiguration("chatgpt").get("gpt3.apiBaseUrl") as string,
-						temperature: vscode.workspace.getConfiguration("chatgpt").get("gpt3.temperature") as number,
-						topP: vscode.workspace.getConfiguration("chatgpt").get("gpt3.top_p") as number,
-					});
+				this.api.topP = this._topP = vscode.workspace.getConfiguration("chatgpt").get("gpt3.top_p") as number ?? 1;
 			}
 		});
 		/*
@@ -194,11 +184,6 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 	public refreshChat() {
 		const conversation = this.conversations[this.currentConversation] as Conversation;
 		this.sendMessage({
-			type: "updateSettings",
-			model: this.model,
-			verbosity: this.verbosity,
-		});
-		this.sendMessage({
 			type: "showConversation",
 			conversationId: this.currentConversation,
 		});
@@ -206,6 +191,11 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 			type: "showInProgress",
 			conversationId: this.currentConversation,
 			inProgress: conversation.inProgress,
+		});
+		this.sendMessage({
+			type: "updateSettings",
+			model: this.model,
+			verbosity: this.verbosity,
 		});
 		this.sendMessage({
 			type: "truncate",
@@ -267,12 +257,13 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		}
 		return 10;
 	}
-	public findNextSlot(i: number) {
-		for (; i <= 9; i++) {
+
+	public findNextSlot(slot: number) {
+		for (let i = slot + 1; i <= 9; i++) {
 			if (this.slots.indexOf("" + i) >= 0)
 				return i;
 		}
-		for (i = 1; i <= 9; i++) {
+		for (let i = slot - 1; i >= 1; i--) {
 			if (this.slots.indexOf("" + i) >= 0)
 				return i;
 		}
@@ -280,6 +271,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	public newChat2(i: number, position: number) {
+		this.currentConversation = -1;
 		this.conversations[i] = {
 			id: i,
 			position: position,
@@ -324,11 +316,12 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 			type: "closeConversation",
 			conversationId: this.currentConversation,
 		});
-		const i = this.findNextSlot(position + 1);
+		this.currentConversation = -1;
+		this.updateContext();
+		const i = this.findNextSlot(position);
 		if (i == 10 || i == position) {
 			this.newChat();
 		} else {
-			this.updateContext();
 			this.showChat(i);
 		}
 	}
@@ -336,6 +329,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 	public clearChat() {
 		const position = this.conversations[this.currentConversation].position;
 		delete this.conversations[this.currentConversation];
+		this.currentConversation = -1;
 		this.newChat(position);
 	}
 
@@ -358,7 +352,7 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 		webviewView.webview.html = this.getWebviewHtml(webviewView.webview);
 
 		webviewView.webview.onDidReceiveMessage(async data => {
-			console.log(data);
+			// console.log(data);
 			switch (data.type) {
 				case 'refreshChat':
 					this.refreshChat();
@@ -721,8 +715,8 @@ export default class ChatGptViewProvider implements vscode.WebviewViewProvider {
 
 		// 2. Add the user's question to the conversation
 		const formattedPrompt = this.processQuestion(prompt, conversation, options.verbosity || Verbosity.normal, options.code, options.language);
-		console.log(formattedPrompt);
-		console.log(prompt);
+		//console.log(formattedPrompt);
+		//console.log(prompt);
 		const msg = {
 			content: formattedPrompt,
 			rawContent: prompt + (options.code ? `\n\`\`\`${options.language}\n${options.code}\n\`\`\`` : ''),
